@@ -16,6 +16,11 @@ pip install -r requirements.txt
 4. 设置用户名（必须以 bot 结尾，如：myvlc_bot）
 5. 复制获得的 Token
 
+复制配置模板并编辑：
+```bash
+cp config.yaml.example config.yaml
+```
+
 编辑 `config.yaml` 文件：
 ```yaml
 telegram:

@@ -332,10 +332,13 @@ async def handle(self, update, context) -> int:
 - 分页加载：避免大目录一次性加载
 - 目录优先排序：提升导航体验
 - 延迟初始化：Session 按需创建
+- `get_next_video()` / `get_previous_video()`：单次遍历 `self.items`（原为双重遍历）
+- `get_video_file_index()`：直接迭代 `self.items`，不再构建中间列表
+- 依赖注入：`FileBrowser` 接受 `app_config` 参数，避免全局耦合
 
 ### 11.2 Logger
 
-- 有界缓存：避免 logger 无限增长
+- 有界缓存：避免 logger 无限增长（最多 20 个，LRU 淘汰）
 - 批量检查：每 100 次写入才检查压缩
 - 流式处理：压缩时使用 deque 滑动窗口
 
@@ -343,3 +346,16 @@ async def handle(self, update, context) -> int:
 
 - 超时保护：防止 VLC 卡死导致主线程阻塞
 - 辅助线程：API 调用在独立线程执行
+- `get_status()` 批量查询：4 个 VLC API 调用合并为 1 个线程（减少 75% 线程创建）
+- `set_subtitle_track()` 内嵌轨道验证：直接调用 VLC API，跳过文件系统扫描
+- `_find_vlc_window()` 窗口句柄缓存：首次查找后缓存，后续通过 `IsWindow()` 快速验证
+- 自适应监控轮询：播放中 1s / 空闲 5s，可中断睡眠机制
+
+### 11.4 Handlers
+
+- `_handle_file()` 索引查找：复用已构建的 `video_list` 做 `list.index()`，避免重复遍历
+
+### 11.5 Watchdog
+
+- 指数退避重启：避免网络波动时频繁重启（60s → 1800s 上限）
+- 恢复检测：网络恢复后自动重置退避计数器

@@ -6,10 +6,9 @@
 dist\TgVLC_Bot\
 │
 ├── 📄 TgVLC_Bot.exe          # 主程序（双击运行）
+├── � config.yaml            # 配置文件（需修改）
 │
-└── 📂 _internal/             # 程序依赖（请勿修改）
-    │
-    ├── 📄 config.yaml         # 配置文件（需修改）
+└── � _internal/             # 程序依赖（请勿修改）
     ├── 📄 python3.dll         # Python运行时
     └── 📦 ...                 # 其他依赖文件
 ```
@@ -18,8 +17,7 @@ dist\TgVLC_Bot\
 
 ### 第一步：配置程序
 
-1. 打开 `_internal` 文件夹
-2. 用文本编辑器打开 `config.yaml`
+1. 用文本编辑器打开 `TgVLC_Bot.exe` **同目录**下的 `config.yaml`
 3. 修改以下配置：
 
 ```yaml
@@ -92,8 +90,7 @@ proxy:
 - 检查网络连接或配置代理
 
 ### 3. 配置文件无法保存
-- 确保有写入权限
-- 检查 _internal 文件夹是否存在
+- 确保对 config.yaml 所在文件夹有写入权限
 
 ## 📞 获取帮助
 
