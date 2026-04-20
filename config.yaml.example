@@ -1,0 +1,32 @@
+telegram:
+  token: "YOUR_TELEGRAM_BOT_TOKEN"
+proxy:
+  enabled: false
+  type: socks5
+  host: 127.0.0.1
+  port: 1080
+  username: ""
+  password: ""
+vlc:
+  path: "C:\\Program Files\\VideoLAN\\VLC\\vlc.exe"
+video:
+  directories:
+    - "D:\\Videos"
+  extensions:
+    - .mp4
+    - .avi
+    - .mkv
+    - .mov
+    - .wmv
+    - .flv
+    - .webm
+    - .m4v
+    - .mpg
+    - .mpeg
+controls:
+  volume_step: 10
+  seek_step: 30
+  page_size: 10
+security:
+  allowed_user_ids: []
+  admin_user_ids: []
