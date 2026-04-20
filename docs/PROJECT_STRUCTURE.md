@@ -5,7 +5,8 @@ TgVLC_Bot/
 ├── main.py                # 主程序入口、Telegram Bot 调度、Watchdog
 ├── config.py              # 配置管理模块（YAML 读写、校验）
 ├── vlc_player.py          # VLC 播放器控制（播放、监控、崩溃恢复）
-├── file_browser.py        # 文件浏览模块（目录导航、分页、排序）
+├── file_browser.py        # 文件浏览模块（目录导航、分页、排序，WebDAV 支持）
+├── webdav_client.py       # WebDAV PROPFIND 客户端（stdlib 实现，零额外依赖）
 ├── session.py             # 用户会话管理与播放历史持久化
 ├── logger.py              # 高级日志系统（JSON 行日志、归档、清理）
 │
@@ -29,7 +30,6 @@ TgVLC_Bot/
 │
 ├── config.yaml.example    # 配置模板（复制为 config.yaml 后使用）
 ├── requirements.txt       # Python 依赖
-├── TgVLC_Bot.spec         # PyInstaller 打包配置（onedir 模式）
 ├── build.bat              # 一键打包脚本
 ├── setup.bat              # 环境检查与启动脚本
 ├── .gitignore
@@ -49,13 +49,14 @@ TgVLC_Bot/
 - 整数参数范围校验
 
 ### file_browser.py
-文件浏览器模块，提供视频文件的浏览和导航功能。支持依赖注入配置实例和根目录边界覆盖。
+文件浏览器模块，提供视频文件的浏览和导航功能。支持本地文件系统和 WebDAV 远程服务器。
 
 **主要功能：**
 - 目录浏览（可配置根目录边界）
 - 分页显示
 - 视频文件过滤
 - 层级导航（单次遍历优化）
+- WebDAV 远程目录浏览（PROPFIND 方法）
 
 ### vlc_player.py
 VLC 播放器控制模块，管理 VLC 播放器的运行和控制。
@@ -108,6 +109,15 @@ Telegram 机器人主程序。
 | `file_browse.py` | 文件浏览、分页、目录切换 |
 | `subtitle.py` | 字幕轨道选择 |
 | `settings.py` | 设置、目录管理、用户管理 |
+
+### webdav_client.py
+WebDAV PROPFIND 客户端，使用标准库实现，无需额外依赖。
+
+**主要功能：**
+- PROPFIND 方法列出远程目录
+- 认证支持（Basic Auth）
+- 视频文件过滤
+- 目录/文件类型检测
 
 ## 启动流程
 

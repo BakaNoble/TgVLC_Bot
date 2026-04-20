@@ -1,6 +1,68 @@
 # 新功能说明
 
-## 功能一：字幕选择功能
+## 功能一：WebDAV 远程文件系统支持
+
+### 功能描述
+系统支持通过 WebDAV 协议浏览远程服务器上的视频文件，无需将文件下载到本地。
+
+### 功能特性
+
+#### 1. **多源配置**
+- 可以在配置文件中添加多个 WebDAV 服务器
+- 每个源有独立的名称、URL 和认证信息
+- 支持在线添加/删除 WebDAV 源（管理员）
+
+#### 2. **目录浏览**
+- 通过 PROPFIND 方法获取远程目录内容
+- 支持子目录导航
+- 视频文件过滤（同本地文件系统）
+
+#### 3. **认证支持**
+- 支持 Basic Auth 用户名/密码认证
+- 认证信息根据 URL 自动匹配
+
+#### 4. **零依赖实现**
+- 使用 Python 标准库（urllib + xml）实现
+- 无需安装额外的 WebDAV 客户端库
+
+### 配置示例
+
+```yaml
+webdav:
+  - name: "我的NAS"
+    url: "http://192.168.1.100:5005/dav"
+    username: "admin"
+    password: "password"
+  - name: "远程存储"
+    url: "https://example.com/webdav"
+    username: "user"
+    password: "pass"
+```
+
+### 技术实现
+
+#### 配置模块 (config.py)
+- `WebDAVSource` 数据类存储源信息
+- `add_webdav_source()` / `remove_webdav_source()` 管理 WebDAV 源
+- `get_webdav_credentials()` 根据 URL 匹配认证信息
+
+#### WebDAV 客户端 (webdav_client.py)
+```python
+def list_directory(url, username="", password="", video_extensions=None):
+    """PROPFIND url 并返回子条目"""
+    # 使用 urllib.request 发送 PROPFIND 请求
+    # 解析 XML 响应
+    # 返回 (success, entries, message)
+```
+
+#### 文件浏览器 (file_browser.py)
+- 检测 URL 路径（http:// / https://）
+- 调用 `_browse_webdav_directory()` 处理远程目录
+- 显示 WebDAV 目录时使用 ☁️ 图标
+
+---
+
+## 功能二：字幕选择功能
 
 ### 功能描述
 用户可以在播放视频时自由选择字幕轨道，支持内嵌字幕和外部字幕文件。系统会自动选择第一个字幕轨道，并提供便捷的字幕切换菜单。

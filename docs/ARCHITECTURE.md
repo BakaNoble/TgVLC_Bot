@@ -13,6 +13,7 @@
 - PyYAML 6.0.1 (配置文件解析)
 - psutil (进程管理)
 - PyInstaller (二进制打包)
+- stdlib urllib + xml (WebDAV 客户端，零额外依赖)
 
 ---
 
@@ -111,18 +112,24 @@ security:          # 安全配置
 
 **数据结构**:
 ```python
+@dataclass(slots=True)
 class FileItem:
     name: str           # 文件/目录名称
-    path: str           # 完整路径
+    path: str           # 完整路径（本地路径或 WebDAV URL）
     is_directory: bool # 是否为目录
     size: int           # 文件大小(字节)
 ```
+
+**支持的数据源**:
+- 本地文件系统
+- WebDAV 远程服务器（通过 webdav_client.py）
 
 **核心方法**:
 
 | 方法 | 功能 |
 |------|------|
-| `browse_directory(dir)` | 浏览指定目录，加载文件列表 |
+| `browse_directory(dir)` | 浏览本地目录或 WebDAV URL，加载文件列表 |
+| `_browse_webdav_directory(url)` | 通过 PROPFIND 浏览 WebDAV 目录 |
 | `get_page_items()` | 获取当前页项目 |
 | `next_page()` / `prev_page()` | 翻页控制 |
 | `get_all_video_files()` | 获取当前目录所有视频 |
@@ -137,6 +144,7 @@ class FileItem:
 - 分页显示（可配置每页数量）
 - 目录优先排序
 - 文件大小格式化显示（KB/MB/GB）
+- WebDAV 认证信息自动注入（从 config 获取）
 
 ---
 
@@ -504,26 +512,30 @@ TgVLC_Bot/
 ├── main.py                # 主程序入口、Telegram Bot 调度、Watchdog
 ├── config.py              # 配置管理模块
 ├── vlc_player.py          # VLC 播放器控制
-├── file_browser.py        # 文件浏览模块
+├── file_browser.py        # 文件浏览模块（本地 + WebDAV）
+├── webdav_client.py       # WebDAV PROPFIND 客户端（stdlib 实现）
 ├── session.py             # 用户会话管理与播放历史
 ├── logger.py              # 高级日志系统
 ├── handlers/              # Telegram 回调处理器
 │   ├── __init__.py
-│   ├── base.py            # 处理器基类
-│   ├── callbacks.py       # 回调数据解析
-│   ├── keyboards.py       # 键盘布局构建
-│   ├── navigation.py      # 主菜单与导航
-│   ├── playback.py        # 播放控制
-│   ├── file_browse.py     # 文件浏览
-│   ├── subtitle.py        # 字幕选择
-│   └── settings.py        # 设置管理
+│   ├── base.py            # CallbackHandler 抽象基类
+│   ├── callbacks.py       # 回调数据前缀定义与解析工具
+│   ├── keyboards.py       # 所有 InlineKeyboard 布局构建
+│   ├── navigation.py      # 主菜单、播放历史导航
+│   ├── playback.py        # 播放控制回调
+│   ├── file_browse.py     # 文件浏览与分页回调
+│   ├── subtitle.py        # 字幕选择回调
+│   └── settings.py        # 设置、目录管理、用户管理
 ├── tests/                 # 单元测试
+│   ├── test_core.py
+│   ├── test_concurrency.py
+│   └── test_config_validation.py
 ├── docs/                  # 项目文档
 ├── config.yaml.example    # 配置模板
 ├── requirements.txt       # Python 依赖
-├── TgVLC_Bot.spec         # PyInstaller 打包配置
-├── build.bat              # 打包脚本
-├── setup.bat              # 启动脚本
+├── TgVLC_Bot.spec         # PyInstaller 打包配置（onedir 模式）
+├── build.bat              # 一键打包脚本
+├── setup.bat              # 环境检查与启动脚本
 └── README.md
 ```
 

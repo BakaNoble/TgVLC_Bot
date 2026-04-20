@@ -7,34 +7,39 @@
 ### 📂 文件浏览与选择
 
 - 可配置的视频文件目录管理
+- **WebDAV 远程文件系统支持（多源配置）**
 - 交互式菜单系统
-- 分页机制（每页10个项目）
+- 分页机制（每页10个项目，可配置）
 - 文件类型过滤（支持 mp4, avi, mkv, mov 等格式）
 - 多级目录导航
 - **返回上级目录功能**
+- **播放历史记录（自动保存/恢复）**
 
 ### 🎮 播放器控制
 
 - 打开/切换视频文件
 - 播放/暂停/停止
-- 进度控制（跳转、前进/后退可调）
+- 进度控制（跳转、前进/后退，步长可调）
 - 音量控制（增减步长可调、静音）
 - 全屏/窗口模式切换
 - 实时状态显示
 - 窗口激活（点击全屏时自动激活VLC窗口）
 - 上一集/下一集快速切换
 - **边界控制（第一集无法上一集，最后一集无法下一集）**
-- **停止后自动返回文件列表**
+- **停止后自动返回文件列表或播放历史**
 - **字幕选择功能（支持内嵌字幕和外部字幕）**
 - **自动选择第一个字幕轨道**
+- **三种播放模式：顺序播放、单集播放、单集循环**
 
 ### ⚙️ 系统集成
 
 - 从指定目录启动 VLC
-- 实例状态监控
+- 实例状态监控与崩溃自动恢复
 - 用户授权管理
 - 代理支持（SOCKS5/HTTP）
 - 配置持久化
+- **WebDAV 源的在线添加/删除管理**
+- **播放历史持久化**
 
 ### 🔐 权限管理
 
@@ -86,6 +91,12 @@ controls:
 security:
   allowed_user_ids: []
   admin_user_ids: []
+
+webdav:
+  - name: "我的NAS"
+    url: "http://192.168.1.100:5005/dav"
+    username: "admin"
+    password: "password"
 ```
 
 ### 3. 运行程序
@@ -102,10 +113,11 @@ python main.py
 
 ```
 TgVLC_Bot/
-├── main.py                # 主程序入口
+├── main.py                # 主程序入口、Telegram Bot 调度、Watchdog
 ├── config.py              # 配置管理模块
 ├── vlc_player.py          # VLC 播放器控制模块
-├── file_browser.py        # 文件浏览模块
+├── file_browser.py        # 文件浏览模块（本地 + WebDAV）
+├── webdav_client.py       # WebDAV PROPFIND 客户端（stdlib 实现）
 ├── session.py             # 用户会话与播放历史
 ├── logger.py              # 日志管理系统
 ├── handlers/              # Telegram 回调处理器
@@ -121,8 +133,7 @@ TgVLC_Bot/
 ├── tests/                 # 单元测试
 ├── docs/                  # 项目文档
 ├── config.yaml.example    # 配置模板（需复制为 config.yaml）
-├── requirements.txt       # Python 依赖
-├── TgVLC_Bot.spec         # PyInstaller 打包配置
+├── requirements.txt        # Python 依赖
 ├── build.bat              # 打包脚本
 ├── setup.bat              # 环境检查与启动脚本
 └── README.md
@@ -145,6 +156,7 @@ TgVLC_Bot/
 - python-telegram-bot 20.7
 - python-vlc 3.0.18121
 - PyYAML 6.0.1
+- psutil（进程管理）
 - PyInstaller（打包）
 
 ## 许可证
