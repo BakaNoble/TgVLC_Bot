@@ -8,6 +8,7 @@ from handlers.base import CallbackHandler, build_standard_menu_text
 from handlers.callbacks import (
     PREFIX_BACK_TO_SETTINGS,
     PREFIX_REMOVEDIR,
+    PREFIX_REMOVE_WEBDAV,
     parse_index_from_callback,
 )
 from handlers.keyboards import (
@@ -24,6 +25,7 @@ class SettingsHandler(CallbackHandler):
     HANDLED_CALLBACKS: Set[str] = {
         "manage_directories",
         "add_directory",
+        "add_webdav",
         "volume_step",
         "seek_step",
         "manage_users",
@@ -34,6 +36,7 @@ class SettingsHandler(CallbackHandler):
         return (
             data in self.HANDLED_CALLBACKS
             or data.startswith(PREFIX_REMOVEDIR)
+            or data.startswith(PREFIX_REMOVE_WEBDAV)
             or data.startswith(PREFIX_BACK_TO_SETTINGS)
         )
 
@@ -50,6 +53,8 @@ class SettingsHandler(CallbackHandler):
             "manage_directories",
             "removedir_",
             "add_directory",
+            "add_webdav",
+            "remove_webdav_",
             "manage_users",
             "add_current_user",
         }
@@ -62,8 +67,12 @@ class SettingsHandler(CallbackHandler):
             return await self._handle_manage_directories(query, user_id)
         if data.startswith(PREFIX_REMOVEDIR):
             return await self._handle_remove_directory(query, data, user_id)
+        if data.startswith(PREFIX_REMOVE_WEBDAV):
+            return await self._handle_remove_webdav(query, data, user_id)
         if data == "add_directory":
             return await self._handle_add_directory(update, context)
+        if data == "add_webdav":
+            return await self._handle_add_webdav(update, context)
         if data.startswith(PREFIX_BACK_TO_SETTINGS):
             await query.edit_message_text(
                 build_standard_menu_text("设置菜单"),
@@ -123,6 +132,44 @@ class SettingsHandler(CallbackHandler):
         context.user_data["current_state"] = self.STATE_ADDING_DIRECTORY
         return self.STATE_ADDING_DIRECTORY
 
+    async def _handle_remove_webdav(self, query, data: str, user_id: int) -> int:
+        success, idx = parse_index_from_callback(data, PREFIX_REMOVE_WEBDAV)
+
+        if success and self.config.remove_webdav_source(idx):
+            await query.answer("WebDAV 源已删除", show_alert=True)
+        else:
+            await query.answer("删除失败", show_alert=True)
+
+        await query.edit_message_text(
+            build_standard_menu_text("视频目录管理", self._format_directory_list() + "\n\n请选择操作："),
+            reply_markup=build_directory_management_keyboard(user_id),
+        )
+        return self.STATE_SETTINGS_MENU
+
+    async def _handle_add_webdav(
+        self,
+        update: Update,
+        context: ContextTypes.DEFAULT_TYPE,
+    ) -> int:
+        query = update.callback_query
+        await query.edit_message_text(
+            build_standard_menu_text(
+                "添加 WebDAV",
+                "请按以下格式发送 WebDAV 信息（每行一项）：\n\n"
+                "名称\n"
+                "URL\n"
+                "用户名\n"
+                "密码\n\n"
+                "示例：\n"
+                "我的NAS\n"
+                "http://192.168.1.100:5005/dav\n"
+                "admin\n"
+                "password123",
+            )
+        )
+        context.user_data["current_state"] = self.STATE_ADDING_WEBDAV
+        return self.STATE_ADDING_WEBDAV
+
     async def _handle_volume_step(
         self,
         update: Update,
@@ -179,6 +226,6 @@ class SettingsHandler(CallbackHandler):
         return self.STATE_SETTINGS_MENU
 
     def _format_directory_list(self) -> str:
-        if not self.config.video_directories:
-            return "（无）"
-        return "\n".join(f"• {directory}" for directory in self.config.video_directories)
+        lines = [f"• {d}" for d in self.config.video_directories]
+        lines += [f"• ☁️ {src.name} ({src.url})" for src in self.config.webdav_sources]
+        return "\n".join(lines) if lines else "（无）"

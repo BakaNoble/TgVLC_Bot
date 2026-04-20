@@ -32,6 +32,7 @@ class CallbackHandler(ABC):
     STATE_ADDING_DIRECTORY = 4
     STATE_WAITING_VOLUME_STEP = 5
     STATE_WAITING_SEEK_STEP = 6
+    STATE_ADDING_WEBDAV = 7
 
     def __init__(
         self,

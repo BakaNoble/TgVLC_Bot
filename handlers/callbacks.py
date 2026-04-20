@@ -19,6 +19,8 @@ PREFIX_HISTORY = "history_"
 PREFIX_REMOVEDIR = "removedir_"
 PREFIX_SUBTITLE = "select_sub_"
 PREFIX_BACK_TO_SETTINGS = "back_to_settings_"
+PREFIX_WEBDAV_ROOT = "webdav_root_"
+PREFIX_REMOVE_WEBDAV = "remove_webdav_"
 
 
 # =============================================================================

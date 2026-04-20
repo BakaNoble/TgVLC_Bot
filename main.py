@@ -110,8 +110,9 @@ def _is_windows_drive_path(text: str) -> bool:
     STATE_SETTINGS_MENU,
     STATE_ADDING_DIRECTORY,
     STATE_WAITING_VOLUME_STEP,
-    STATE_WAITING_SEEK_STEP
-) = range(7)
+    STATE_WAITING_SEEK_STEP,
+    STATE_ADDING_WEBDAV,
+) = range(8)
 
 
 # =============================================================================
@@ -305,6 +306,28 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("❌ 添加失败：目录不存在或已存在")
         else:
             await update.message.reply_text("❌ 只有管理员可以添加目录")
+        context.user_data.pop('current_state', None)
+        return STATE_SETTINGS_MENU
+
+    if current_state == STATE_ADDING_WEBDAV:
+        if config.is_admin(user_id):
+            lines = text.strip().splitlines()
+            if len(lines) >= 2:
+                name = lines[0].strip()
+                url = lines[1].strip()
+                username = lines[2].strip() if len(lines) > 2 else ""
+                password = lines[3].strip() if len(lines) > 3 else ""
+                if url.startswith(("http://", "https://")):
+                    if config.add_webdav_source(name, url, username, password):
+                        await update.message.reply_text(f"✅ 已添加 WebDAV：{name}")
+                    else:
+                        await update.message.reply_text("❌ 添加失败：URL 已存在")
+                else:
+                    await update.message.reply_text("❌ URL 必须以 http:// 或 https:// 开头")
+            else:
+                await update.message.reply_text("❌ 格式错误，至少需要名称和 URL 两行")
+        else:
+            await update.message.reply_text("❌ 只有管理员可以添加 WebDAV")
         context.user_data.pop('current_state', None)
         return STATE_SETTINGS_MENU
 
@@ -548,6 +571,10 @@ def main():
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input)
             ],
             STATE_WAITING_SEEK_STEP: [
+                CallbackQueryHandler(button_callback),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input)
+            ],
+            STATE_ADDING_WEBDAV: [
                 CallbackQueryHandler(button_callback),
                 MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input)
             ]

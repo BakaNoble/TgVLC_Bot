@@ -5,7 +5,7 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from handlers.base import CallbackHandler, build_standard_menu_text
-from handlers.callbacks import PREFIX_DIR, PREFIX_FILE, PREFIX_ROOTDIR, parse_index_from_callback
+from handlers.callbacks import PREFIX_DIR, PREFIX_FILE, PREFIX_ROOTDIR, PREFIX_WEBDAV_ROOT, parse_index_from_callback
 from handlers.keyboards import (
     build_directory_list_keyboard,
     build_file_browsing_keyboard,
@@ -31,6 +31,7 @@ class FileBrowseHandler(CallbackHandler):
         return (
             data in self.HANDLED_CALLBACKS
             or data.startswith(PREFIX_ROOTDIR)
+            or data.startswith(PREFIX_WEBDAV_ROOT)
             or data.startswith(PREFIX_DIR)
             or data.startswith(PREFIX_FILE)
         )
@@ -45,6 +46,8 @@ class FileBrowseHandler(CallbackHandler):
         user_id = update.effective_user.id
         browser = self.get_user_browser(user_id)
 
+        if data.startswith(PREFIX_WEBDAV_ROOT):
+            return await self._handle_webdav_root(query, data, browser, user_id)
         if data.startswith(PREFIX_ROOTDIR):
             return await self._handle_rootdir(query, data, browser, user_id)
         if data.startswith(PREFIX_DIR):
@@ -178,6 +181,26 @@ class FileBrowseHandler(CallbackHandler):
             )
         else:
             await query.answer(message, show_alert=True)
+        return self.STATE_SELECTING_FILE
+
+    async def _handle_webdav_root(self, query, data: str, browser, user_id: int) -> int:
+        success, idx = parse_index_from_callback(data, PREFIX_WEBDAV_ROOT)
+        if not success or idx >= len(self.config.webdav_sources):
+            await query.answer("WebDAV 源无效", show_alert=True)
+            return self.STATE_BROWSING_FILES
+
+        src = self.config.webdav_sources[idx]
+        browse_success, message = browser.browse_directory(src.url)
+        if not browse_success:
+            await query.answer(message, show_alert=True)
+            return self.STATE_BROWSING_FILES
+
+        self.session_manager.set_browser_source(user_id, "browse")
+        await query.answer()
+        await query.edit_message_text(
+            browser.get_display_list(),
+            reply_markup=build_file_browsing_keyboard(browser),
+        )
         return self.STATE_SELECTING_FILE
 
     async def _handle_directory_list(self, query, user_id: int) -> int:

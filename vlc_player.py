@@ -5,6 +5,7 @@ import os
 import re
 import threading
 import time
+import urllib.parse
 from ctypes import wintypes
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Tuple
@@ -334,7 +335,7 @@ class VLCPlayer:
                 self._consecutive_errors = 0
                 self._recovery_attempts = 0
 
-            if saved_file and os.path.exists(saved_file):
+            if saved_file and (self._is_url(saved_file) or os.path.exists(saved_file)):
                 success, _ = self.open_file(saved_file, saved_video_list, saved_index)
                 if success:
                     logger.info("Recovered playback: %s", os.path.basename(saved_file))
@@ -505,24 +506,38 @@ class VLCPlayer:
     def has_multiple_subtitles(self) -> bool:
         return len(self.get_subtitle_tracks()) > 1
 
+    @staticmethod
+    def _is_url(path: str) -> bool:
+        return path.startswith(("http://", "https://"))
+
     def open_file(
         self,
         file_path: str,
         video_list: Optional[List[str]] = None,
         current_index: int = -1,
     ) -> Tuple[bool, str]:
-        """Open a file and start playback immediately."""
+        """Open a local file or HTTP URL and start playback immediately."""
         if self.instance is None or self.player is None:
             return False, "播放器未初始化"
-        if not os.path.isfile(file_path):
+
+        is_url = self._is_url(file_path)
+        if not is_url and not os.path.isfile(file_path):
             return False, "视频文件不存在"
 
-        normalized_path = os.path.normpath(file_path)
+        normalized_path = file_path if is_url else os.path.normpath(file_path)
 
         try:
             self.stop()
 
-            media = self.instance.media_new(normalized_path)
+            play_url = normalized_path
+            if is_url:
+                webdav_src = config.get_webdav_credentials(normalized_path)
+                if webdav_src and webdav_src.username:
+                    parsed = urllib.parse.urlparse(normalized_path)
+                    userinfo = f"{urllib.parse.quote(webdav_src.username, safe='')}:{urllib.parse.quote(webdav_src.password, safe='')}"
+                    authed = parsed._replace(netloc=f"{userinfo}@{parsed.hostname}" + (f":{parsed.port}" if parsed.port else ""))
+                    play_url = urllib.parse.urlunparse(authed)
+            media = self.instance.media_new(play_url)
             self.player.set_media(media)
             media.release()
 
@@ -535,7 +550,10 @@ class VLCPlayer:
                 self._external_subtitle_paths.clear()
                 self._current_external_subtitle = None
                 if video_list is not None:
-                    self.video_list = [os.path.normpath(path) for path in video_list]
+                    self.video_list = [
+                        p if self._is_url(p) else os.path.normpath(p)
+                        for p in video_list
+                    ]
                     self.current_video_index = current_index
 
             result = self._safe_vlc_call(self.player.play, timeout=3.0)
@@ -548,8 +566,9 @@ class VLCPlayer:
             time.sleep(0.5)
             self._select_first_subtitle()
 
-            logger.info("Now playing: %s", os.path.basename(normalized_path))
-            return True, f"正在播放: {os.path.basename(normalized_path)}"
+            display_name = urllib.parse.unquote(normalized_path.rsplit("/", 1)[-1]) if is_url else os.path.basename(normalized_path)
+            logger.info("Now playing: %s", display_name)
+            return True, f"正在播放: {display_name}"
         except Exception as exc:
             logger.error("Failed to open file %s: %s", normalized_path, exc)
             return False, f"打开文件失败: {exc}"
@@ -903,7 +922,7 @@ class VLCPlayer:
             status_label = "播放中" if is_playing else "已暂停"
             self._last_status_text = (
                 "播放器状态\n\n"
-                f"文件: {os.path.basename(current_file)}\n"
+                f"文件: {urllib.parse.unquote(current_file.rsplit('/', 1)[-1]) if self._is_url(current_file) else os.path.basename(current_file)}\n"
                 f"状态: {status_label}\n"
                 f"模式: {mode_name}\n"
                 f"进度: {self._format_time(current_time if isinstance(current_time, int) else -1)}"
@@ -1044,11 +1063,11 @@ class VLCPlayer:
                 if 0 <= current_index < len(playlist) - 1:
                     next_index = current_index + 1
                     next_file = playlist[next_index]
-                    if os.path.exists(next_file):
+                    if self._is_url(next_file) or os.path.exists(next_file):
                         logger.info("Auto-playing next file: %s", os.path.basename(next_file))
                         self.open_file(next_file, playlist, next_index)
             elif mode == PlayMode.SINGLE_LOOP:
-                if current_file and os.path.exists(current_file):
+                if current_file and (self._is_url(current_file) or os.path.exists(current_file)):
                     logger.info("Replaying current file in single-loop mode")
                     self.open_file(current_file, playlist, current_index)
         finally:

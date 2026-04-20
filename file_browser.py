@@ -3,10 +3,12 @@ File browsing helpers for local video directories.
 """
 import logging
 import os
+import urllib.parse
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, List, Optional, Tuple
 
 from config import config
+import webdav_client
 
 if TYPE_CHECKING:
     from config import Config
@@ -40,12 +42,19 @@ class FileBrowser:
         self._video_extensions_set: set[str] = set()
         self._normalized_root_dirs: tuple[str, ...] = tuple()
 
+    @staticmethod
+    def _is_webdav_path(path: str) -> bool:
+        return path.startswith(("http://", "https://"))
+
     def browse_directory(
         self,
         directory: str,
         root_directories: Optional[Iterable[str]] = None,
     ) -> Tuple[bool, str]:
-        """Browse a directory and load matching file entries."""
+        """Browse a local directory or WebDAV URL."""
+        if self._is_webdav_path(directory):
+            return self._browse_webdav_directory(directory, root_directories)
+
         if not os.path.isdir(directory):
             logger.error("Directory not found: %s", directory)
             return False, "目录不存在"
@@ -199,8 +208,15 @@ class FileBrowser:
             return "📂 当前目录为空"
 
         page_items = self.get_page_items()
+        if self._is_webdav_path(self.current_path or ""):
+            display_path = urllib.parse.unquote(
+                urllib.parse.urlparse(self.current_path).path
+            )
+            display_path = f"☁️ WebDAV: {display_path}"
+        else:
+            display_path = f"📂 {self.current_path}"
         lines = [
-            f"📂 {self.current_path}",
+            display_path,
             f"📄 第 {self.get_current_page()}/{self.get_page_count()} 页",
             "━" * 30,
             "",
@@ -223,12 +239,22 @@ class FileBrowser:
     def is_in_root_directory(self) -> bool:
         if not self.current_path:
             return False
+        if self._is_webdav_path(self.current_path):
+            current_stripped = self.current_path.rstrip("/")
+            return any(
+                current_stripped == src.url.rstrip("/")
+                for src in self.config.webdav_sources
+            )
         current_normalized = os.path.normcase(os.path.normpath(self.current_path))
         return current_normalized in self._normalized_root_dirs
 
     def get_parent_directory(self) -> Optional[str]:
         if not self.current_path or self.is_in_root_directory():
             return None
+        if self._is_webdav_path(self.current_path):
+            trimmed = self.current_path.rstrip("/")
+            parent = trimmed.rsplit("/", 1)[0] + "/"
+            return parent
         parent = os.path.dirname(self.current_path)
         return parent if parent != self.current_path else None
 
@@ -240,6 +266,57 @@ class FileBrowser:
 
         logger.info("Navigating to parent directory: %s", parent)
         return self.browse_directory(parent)
+
+    def _browse_webdav_directory(
+        self,
+        url: str,
+        root_directories: Optional[Iterable[str]] = None,
+    ) -> Tuple[bool, str]:
+        """Browse a WebDAV directory via PROPFIND."""
+        old_path = self.current_path
+        old_items = list(self.items)
+        old_page = self.current_page
+
+        try:
+            self.current_path = url
+            self.items = []
+            self.current_page = 0
+            self._video_extensions_set = {
+                ext.lower() for ext in self.config.video_extensions
+            }
+
+            src = self.config.get_webdav_credentials(url)
+            username = src.username if src else ""
+            password = src.password if src else ""
+            base_url = src.url if src else url.rstrip("/")
+
+            success, entries, message = webdav_client.list_directory(
+                url,
+                username=username,
+                password=password,
+                video_extensions=self._video_extensions_set,
+            )
+            if not success:
+                self._restore_state(old_path, old_items, old_page)
+                return False, message
+            for entry in entries:
+                full_url = webdav_client.build_full_url(base_url, entry.href)
+                self.items.append(
+                    FileItem(
+                        name=urllib.parse.unquote(entry.name),
+                        path=full_url,
+                        is_directory=entry.is_directory,
+                        size=entry.size,
+                    )
+                )
+
+            logger.info("Browsed WebDAV directory: %s, found %s items", url, len(self.items))
+            return True, f"已加载 {len(self.items)} 个项目"
+
+        except Exception as exc:
+            logger.error("Failed to browse WebDAV directory %s: %s", url, exc)
+            self._restore_state(old_path, old_items, old_page)
+            return False, f"WebDAV 浏览失败: {exc}"
 
     def reset(self) -> None:
         self.current_path = None

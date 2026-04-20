@@ -28,6 +28,14 @@ def _button(text: str, callback_data: str, min_width: int = MAIN_MENU_LABEL_WIDT
 
 def _history_directory_label(entry: PlayHistoryEntry) -> str:
     """Prefer the grandparent directory name for history display."""
+    if entry.directory.startswith(("http://", "https://")):
+        import urllib.parse
+        url_path = urllib.parse.unquote(urllib.parse.urlparse(entry.directory).path)
+        parts = [p for p in url_path.rstrip("/").split("/") if p]
+        if len(parts) >= 2:
+            return f"☁️ {parts[-2]}"
+        return f"☁️ {parts[-1]}" if parts else "☁️ WebDAV"
+
     normalized_directory = os.path.normpath(entry.directory)
     parent_directory = os.path.dirname(normalized_directory)
     grandparent_name = os.path.basename(parent_directory)
@@ -129,9 +137,9 @@ def build_directory_list_keyboard(user_id: int) -> InlineKeyboardMarkup:
             _button(dir_name, f"rootdir_{i}", MAIN_MENU_LABEL_WIDTH)
         ])
 
-    if config.is_admin(user_id):
+    for i, src in enumerate(config.webdav_sources):
         keyboard.append([
-            _button("添加目录", "add_directory", MAIN_MENU_LABEL_WIDTH)
+            _button(f"☁️ {src.name}", f"webdav_root_{i}", MAIN_MENU_LABEL_WIDTH)
         ])
 
     keyboard.append([
@@ -240,7 +248,13 @@ def build_directory_management_keyboard(user_id: int) -> InlineKeyboardMarkup:
             _button("浏览", f"rootdir_{i}"),
         ])
 
-    keyboard.append([_button("添加目录", "add_directory")])
+    for i, src in enumerate(config.webdav_sources):
+        keyboard.append([
+            _button(f"删除 ☁️ {src.name}", f"remove_webdav_{i}"),
+        ])
+
+    keyboard.append([_button("添加本地目录", "add_directory")])
+    keyboard.append([_button("添加 WebDAV", "add_webdav")])
     keyboard.append([
         _button("返回设置", f"back_to_settings_{user_id}")
     ])

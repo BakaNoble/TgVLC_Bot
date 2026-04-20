@@ -30,3 +30,8 @@ controls:
 security:
   allowed_user_ids: []
   admin_user_ids: []
+webdav:
+  - name: "WebDAV"
+    url: "http://localhost:19798/dav"
+    username: ""
+    password: ""

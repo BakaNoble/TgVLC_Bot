@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import threading
+from dataclasses import dataclass
 from typing import List, Optional
 
 import yaml
@@ -20,6 +21,15 @@ def get_app_dir() -> str:
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+
+@dataclass
+class WebDAVSource:
+    """A single WebDAV mount configuration."""
+    name: str
+    url: str
+    username: str = ""
+    password: str = ""
 
 
 class Config:
@@ -57,7 +67,8 @@ class Config:
         'security': {
             'allowed_user_ids': [],
             'admin_user_ids': []
-        }
+        },
+        'webdav': []
     }
 
     def __init__(self, config_file: Optional[str] = None):
@@ -86,6 +97,8 @@ class Config:
 
         self.allowed_user_ids: List[int] = []
         self.admin_user_ids: List[int] = []
+
+        self.webdav_sources: List['WebDAVSource'] = []
 
     def load_config(self) -> bool:
         """Load settings from YAML, creating defaults when needed."""
@@ -171,6 +184,10 @@ class Config:
                 security_config.get('admin_user_ids', [])
             )
 
+            self.webdav_sources = self._parse_webdav_sources(
+                self.config_data.get('webdav', [])
+            )
+
         except Exception as e:
             logger.error(f"Config parse error: {e}")
             self._create_default_config()
@@ -240,7 +257,16 @@ class Config:
             'security': {
                 'allowed_user_ids': list(self.allowed_user_ids),
                 'admin_user_ids': list(self.admin_user_ids)
-            }
+            },
+            'webdav': [
+                {
+                    'name': src.name,
+                    'url': src.url,
+                    'username': src.username,
+                    'password': src.password,
+                }
+                for src in self.webdav_sources
+            ]
         }
 
     def _write_config_file(self, config_data: dict) -> None:
@@ -291,6 +317,34 @@ class Config:
                     self.save_config()
                     logger.info(f"Video directory removed: {existing}")
                     return True
+            return False
+
+    def add_webdav_source(self, name: str, url: str, username: str = "", password: str = "") -> bool:
+        """Add a new WebDAV source."""
+        url = url.rstrip("/")
+        with self._lock:
+            for src in self.webdav_sources:
+                if src.url.rstrip("/") == url:
+                    logger.warning(f"WebDAV source already exists: {url}")
+                    return False
+            self.webdav_sources.append(WebDAVSource(
+                name=name or url,
+                url=url,
+                username=username,
+                password=password,
+            ))
+            self.save_config()
+            logger.info(f"WebDAV source added: {name} ({url})")
+            return True
+
+    def remove_webdav_source(self, index: int) -> bool:
+        """Remove a WebDAV source by index."""
+        with self._lock:
+            if 0 <= index < len(self.webdav_sources):
+                removed = self.webdav_sources.pop(index)
+                self.save_config()
+                logger.info(f"WebDAV source removed: {removed.name} ({removed.url})")
+                return True
             return False
 
     def add_allowed_user(self, user_id: int) -> bool:
@@ -384,6 +438,34 @@ class Config:
                 errors.append(f"Invalid proxy port: {self.proxy_port} (must be 1-65535)")
 
         return errors
+
+    @staticmethod
+    def _parse_webdav_sources(raw: any) -> List[WebDAVSource]:
+        """Parse the ``webdav`` list from YAML into typed objects."""
+        if not isinstance(raw, list):
+            return []
+
+        sources: List[WebDAVSource] = []
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get('url', '')).rstrip('/')
+            if not url:
+                continue
+            sources.append(WebDAVSource(
+                name=str(item.get('name', '') or url),
+                url=url,
+                username=str(item.get('username', '')),
+                password=str(item.get('password', '')),
+            ))
+        return sources
+
+    def get_webdav_credentials(self, file_url: str) -> Optional[WebDAVSource]:
+        """Return the WebDAV source whose URL is a prefix of *file_url*."""
+        for src in self.webdav_sources:
+            if file_url.startswith(src.url):
+                return src
+        return None
 
 
 config = Config()

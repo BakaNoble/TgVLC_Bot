@@ -4,6 +4,7 @@ Per-user session management with thread safety.
 import json
 import logging
 import os
+import urllib.parse
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import TYPE_CHECKING, Dict, Iterable, List, Literal, Optional, Tuple
@@ -116,19 +117,40 @@ class UserSession:
         with self._lock:
             return self.last_play_source
 
+    @staticmethod
+    def _is_url(path: str) -> bool:
+        return path.startswith(("http://", "https://"))
+
     def add_play_history(self, file_path: str) -> None:
         """Record the played file's directory and latest file name."""
-        directory = os.path.normpath(os.path.dirname(file_path))
-        file_name = os.path.basename(file_path)
+        if self._is_url(file_path):
+            parsed = urllib.parse.urlparse(file_path)
+            url_path = urllib.parse.unquote(parsed.path)
+            file_name = url_path.rsplit("/", 1)[-1]
+            dir_path = url_path.rsplit("/", 1)[0] + "/"
+            directory = urllib.parse.urlunparse(
+                (parsed.scheme, parsed.netloc, dir_path, "", "", "")
+            )
+        else:
+            directory = os.path.normpath(os.path.dirname(file_path))
+            file_name = os.path.basename(file_path)
+
         if not directory or not file_name:
             return
 
         with self._lock:
-            normalized_directory = os.path.normcase(directory)
-            self.play_history = [
-                entry for entry in self.play_history
-                if os.path.normcase(entry.directory) != normalized_directory
-            ]
+            if self._is_url(directory):
+                normalized_directory = directory.rstrip("/")
+                self.play_history = [
+                    entry for entry in self.play_history
+                    if entry.directory.rstrip("/") != normalized_directory
+                ]
+            else:
+                normalized_directory = os.path.normcase(directory)
+                self.play_history = [
+                    entry for entry in self.play_history
+                    if os.path.normcase(entry.directory) != normalized_directory
+                ]
             self.play_history.insert(0, PlayHistoryEntry(directory=directory, file_name=file_name))
             del self.play_history[self._max_history_items:]
 
@@ -197,8 +219,13 @@ class SessionManager:
                 if not isinstance(directory, str) or not isinstance(file_name, str):
                     continue
 
-                normalized_directory = os.path.normpath(directory)
-                normalized_key = os.path.normcase(normalized_directory)
+                is_url = directory.startswith(("http://", "https://"))
+                if is_url:
+                    normalized_directory = directory
+                    normalized_key = directory.rstrip("/")
+                else:
+                    normalized_directory = os.path.normpath(directory)
+                    normalized_key = os.path.normcase(normalized_directory)
                 if not normalized_directory or not file_name or normalized_key in seen_directories:
                     continue
 
